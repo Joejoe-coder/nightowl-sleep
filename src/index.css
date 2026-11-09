@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 夜间暖墨底 + 珊瑚点缀（深色单主题） */
+    --background: 24 14% 7%;
+    --foreground: 36 28% 92%;
+    --card: 25 12% 10%;
+    --card-foreground: 36 28% 92%;
+    --popover: 25 13% 11%;
+    --popover-foreground: 36 28% 92%;
+    --primary: 11 74% 59%;
+    --primary-foreground: 24 20% 9%;
+    --secondary: 26 11% 15%;
+    --secondary-foreground: 36 24% 88%;
+    --muted: 26 10% 14%;
+    --muted-foreground: 30 9% 60%;
+    --accent: 26 12% 15%;
+    --accent-foreground: 36 28% 92%;
+    --destructive: 4 68% 52%;
+    --destructive-foreground: 36 28% 94%;
+    --border: 27 10% 17%;
+    --input: 27 10% 20%;
+    --ring: 11 74% 59%;
+    --radius: 0.875rem;
+    /* 语义色（同暖色系明度阶梯） */
+    --warn: 36 72% 58%;
+    --good: 11 74% 59%;
+    --sidebar-background: 25 12% 9%;
+    --sidebar-foreground: 36 24% 88%;
+    --sidebar-primary: 11 74% 59%;
+    --sidebar-primary-foreground: 24 20% 9%;
+    --sidebar-accent: 26 11% 14%;
+    --sidebar-accent-foreground: 36 24% 88%;
+    --sidebar-border: 27 10% 15%;
+    --sidebar-ring: 11 74% 59%;
+  }
+
+  .dark {
+    --background: 24 14% 7%;
+    --foreground: 36 28% 92%;
+    --card: 25 12% 10%;
+    --card-foreground: 36 28% 92%;
+    --popover: 25 13% 11%;
+    --popover-foreground: 36 28% 92%;
+    --primary: 11 74% 59%;
+    --primary-foreground: 24 20% 9%;
+    --secondary: 26 11% 15%;
+    --secondary-foreground: 36 24% 88%;
+    --muted: 26 10% 14%;
+    --muted-foreground: 30 9% 60%;
+    --accent: 26 12% 15%;
+    --accent-foreground: 36 28% 92%;
+    --destructive: 4 68% 52%;
+    --destructive-foreground: 36 28% 94%;
+    --border: 27 10% 17%;
+    --input: 27 10% 20%;
+    --ring: 11 74% 59%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Noto Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* 深色模式下原生日期/时间控件的图标反色 */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.85) sepia(0.15);
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  /* 大数字/展示字体：Fraunces 衬线（拉丁与数字），中文回落宋体系 */
+  .font-display {
+    font-family: "Fraunces", "Songti SC", "Noto Serif SC", Georgia, serif;
+    font-feature-settings: "tnum" 1;
+  }
+  /* 眉题/标签：等宽 + 大写 + 宽字距 */
+  .label-caps {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 11px;
+  }
+  .hairline-t {
+    border-top: 1px solid hsl(var(--border));
+  }
+  .hairline-b {
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .text-warn {
+    color: hsl(var(--warn));
+  }
+  .bg-warn {
+    background-color: hsl(var(--warn));
+  }
+}
