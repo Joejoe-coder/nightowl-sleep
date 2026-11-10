@@ -6,6 +6,11 @@ import { ScoreRing } from "@/components/ScoreRing";
 import { SleepChart } from "@/components/SleepChart";
 import { RecordDialog } from "@/components/RecordDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { SoundMixer } from "@/components/SoundMixer";
+import { AlarmPanel } from "@/components/AlarmPanel";
+import { AlarmWatcher } from "@/components/AlarmWatcher";
+import { BottomNav, type TabKey } from "@/components/BottomNav";
+import { renderShareCard, shareCard } from "@/lib/shareCard";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +40,7 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
+  Share2,
 } from "lucide-react";
 import {
   buildInsights,
@@ -58,10 +64,12 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  const [tab, setTab] = useState<TabKey>("report");
   const [recordOpen, setRecordOpen] = useState(false);
   const [editing, setEditing] = useState<SleepRecord | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleting, setDeleting] = useState<SleepRecord | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const utils = trpc.useUtils();
   const removeMut = trpc.sleep.remove.useMutation({
@@ -98,6 +106,19 @@ export default function Dashboard() {
     [records, target],
   );
 
+  const onShare = async () => {
+    if (sharing || records.length === 0) return;
+    setSharing(true);
+    try {
+      const blob = await renderShareCard(records, target);
+      await shareCard(blob);
+    } catch {
+      /* 用户取消或生成失败，静默 */
+    } finally {
+      setSharing(false);
+    }
+  };
+
   if (authLoading || !user) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-6 px-5 py-8">
@@ -111,7 +132,7 @@ export default function Dashboard() {
   const firstName = user.name?.split(" ")[0] ?? "";
 
   return (
-    <div className="min-h-dvh pb-28">
+    <div className="min-h-dvh pb-24">
       {/* 顶栏 */}
       <header className="hairline-b sticky top-0 z-40 bg-background/90 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-5">
@@ -120,6 +141,16 @@ export default function Dashboard() {
             <span className="font-display text-lg tracking-tight">夜航睡眠</span>
           </div>
           <div className="flex items-center gap-1">
+            {tab === "report" && records.length > 0 && (
+              <button
+                onClick={onShare}
+                disabled={sharing}
+                aria-label="分享七日报告"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <Share2 className="h-5 w-5" />
+              </button>
+            )}
             <button
               onClick={() => setSettingsOpen(true)}
               aria-label="睡眠目标设置"
@@ -155,188 +186,200 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-2xl px-5">
-        {/* 概览 */}
-        <section className="py-8">
-          <p className="label-caps text-muted-foreground">
-            sleep report · {fmtDateCn(todayStr())}
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold leading-snug tracking-tight">
-            {firstName ? `${firstName}，` : ""}把每一晚
-            <span className="text-primary">睡成想要的样子</span>。
-          </h1>
-
-          <div className="mt-8 flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:gap-10">
-            <ScoreRing score={latestScore} />
-            <div className="w-full flex-1">
-              {latest ? (
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-5">
-                  <div>
-                    <dt className="label-caps text-muted-foreground">昨夜时长</dt>
-                    <dd className="font-display mt-1.5 text-2xl tracking-tight">
-                      {fmtDur(latestDur!)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="label-caps text-muted-foreground">醒来感觉</dt>
-                    <dd className="font-display mt-1.5 text-2xl tracking-tight">
-                      {["很糟糕", "不太好", "一般", "不错", "很棒"][
-                        latest.quality - 1
-                      ]}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="label-caps text-muted-foreground">上床 / 起床</dt>
-                    <dd className="font-display mt-1.5 text-2xl tracking-tight">
-                      {latest.bedTime} – {latest.wakeTime}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="label-caps text-muted-foreground">入睡耗时</dt>
-                    <dd className="font-display mt-1.5 text-2xl tracking-tight">
-                      {latest.latencyMin} 分钟
-                    </dd>
-                  </div>
-                </dl>
-              ) : (
-                <div className="text-muted-foreground">
-                  <p className="text-base leading-relaxed">
-                    还没有睡眠记录。明早醒来后，花十秒钟记下你的第一晚。
-                  </p>
-                  <Button
-                    size="lg"
-                    className="mt-5"
-                    onClick={() => {
-                      setEditing(null);
-                      setRecordOpen(true);
-                    }}
-                  >
-                    <Plus className="mr-1.5 h-4 w-4" />
-                    记录第一晚
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 统计行 */}
-          {records.length > 0 && (
-            <div className="mt-10 grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-card">
-              <Stat label="7 次均值" value={avg7 != null ? fmtDur(avg7) : "—"} />
-              <Stat label="连续记录" value={`${streak} 天`} />
-              <Stat
-                label="平均入睡"
-                value={avgLatency != null ? `${avgLatency} 分钟` : "—"}
-              />
-            </div>
-          )}
-        </section>
-
-        {records.length > 0 && (
+        {tab === "report" && (
           <>
-            {/* 图表 */}
-            <section className="hairline-t py-8">
-              <div className="mb-5 flex items-baseline justify-between">
-                <h2 className="label-caps text-muted-foreground">近 14 天</h2>
-                <span className="text-xs text-muted-foreground">
-                  目标 {fmtDur(target)} · {targetBed} 前上床
-                </span>
-              </div>
-              <SleepChart records={records} targetMinutes={target} />
-            </section>
+            {/* 概览 */}
+            <section className="py-8">
+              <p className="label-caps text-muted-foreground">
+                sleep report · {fmtDateCn(todayStr())}
+              </p>
+              <h1 className="mt-3 text-3xl font-semibold leading-snug tracking-tight">
+                {firstName ? `${firstName}，` : ""}把每一晚
+                <span className="text-primary">睡成想要的样子</span>。
+              </h1>
 
-            {/* 建议 */}
-            <section className="hairline-t py-8">
-              <h2 className="label-caps mb-5 text-muted-foreground">
-                给你的建议
-              </h2>
-              <ul className="grid gap-3">
-                {insights.map((it, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
-                  >
-                    {it.tone === "warn" ? (
-                      <AlertTriangle
-                        className="text-warn mt-0.5 h-4.5 w-4.5 shrink-0"
-                        aria-hidden
-                      />
-                    ) : it.tone === "good" ? (
-                      <CheckCircle2
-                        className="mt-0.5 h-4.5 w-4.5 shrink-0 text-primary"
-                        aria-hidden
-                      />
-                    ) : (
-                      <TrendingUp
-                        className="mt-0.5 h-4.5 w-4.5 shrink-0 text-muted-foreground"
-                        aria-hidden
-                      />
-                    )}
-                    <p className="text-sm leading-relaxed">{it.text}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            {/* 历史 */}
-            <section className="hairline-t py-8">
-              <h2 className="label-caps mb-5 text-muted-foreground">
-                历史记录
-              </h2>
-              <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-                {records.map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex items-center gap-4 px-4 py-3.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">{fmtDateCn(r.date)}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {r.bedTime} – {r.wakeTime} ·{" "}
-                        {qualityShort(r.quality)}
-                        {r.note ? ` · ${r.note}` : ""}
+              <div className="mt-8 flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:gap-10">
+                <ScoreRing score={latestScore} />
+                <div className="w-full flex-1">
+                  {latest ? (
+                    <dl className="grid grid-cols-2 gap-x-6 gap-y-5">
+                      <div>
+                        <dt className="label-caps text-muted-foreground">昨夜时长</dt>
+                        <dd className="font-display mt-1.5 text-2xl tracking-tight">
+                          {fmtDur(latestDur!)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="label-caps text-muted-foreground">醒来感觉</dt>
+                        <dd className="font-display mt-1.5 text-2xl tracking-tight">
+                          {["很糟糕", "不太好", "一般", "不错", "很棒"][
+                            latest.quality - 1
+                          ]}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="label-caps text-muted-foreground">上床 / 起床</dt>
+                        <dd className="font-display mt-1.5 text-2xl tracking-tight">
+                          {latest.bedTime} – {latest.wakeTime}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="label-caps text-muted-foreground">入睡耗时</dt>
+                        <dd className="font-display mt-1.5 text-2xl tracking-tight">
+                          {latest.latencyMin} 分钟
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <div className="text-muted-foreground">
+                      <p className="text-base leading-relaxed">
+                        还没有睡眠记录。明早醒来后，花十秒钟记下你的第一晚。
                       </p>
-                    </div>
-                    <span className="font-display shrink-0 text-lg tracking-tight">
-                      {fmtDur(durationOf(r))}
-                    </span>
-                    <div className="flex shrink-0 items-center">
-                      <button
-                        aria-label={`编辑 ${fmtDateCn(r.date)} 的记录`}
+                      <Button
+                        size="lg"
+                        className="mt-5"
                         onClick={() => {
-                          setEditing(r);
+                          setEditing(null);
                           setRecordOpen(true);
                         }}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        aria-label={`删除 ${fmtDateCn(r.date)} 的记录`}
-                        onClick={() => setDeleting(r)}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                        <Plus className="mr-1.5 h-4 w-4" />
+                        记录第一晚
+                      </Button>
                     </div>
-                  </li>
-                ))}
-              </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* 统计行 */}
+              {records.length > 0 && (
+                <div className="mt-10 grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-card">
+                  <Stat label="7 次均值" value={avg7 != null ? fmtDur(avg7) : "—"} />
+                  <Stat label="连续记录" value={`${streak} 天`} />
+                  <Stat
+                    label="平均入睡"
+                    value={avgLatency != null ? `${avgLatency} 分钟` : "—"}
+                  />
+                </div>
+              )}
             </section>
+
+            {records.length > 0 && (
+              <>
+                {/* 图表 */}
+                <section className="hairline-t py-8">
+                  <div className="mb-5 flex items-baseline justify-between">
+                    <h2 className="label-caps text-muted-foreground">近 14 天</h2>
+                    <span className="text-xs text-muted-foreground">
+                      目标 {fmtDur(target)} · {targetBed} 前上床
+                    </span>
+                  </div>
+                  <SleepChart records={records} targetMinutes={target} />
+                </section>
+
+                {/* 建议 */}
+                <section className="hairline-t py-8">
+                  <h2 className="label-caps mb-5 text-muted-foreground">
+                    给你的建议
+                  </h2>
+                  <ul className="grid gap-3">
+                    {insights.map((it, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
+                      >
+                        {it.tone === "warn" ? (
+                          <AlertTriangle
+                            className="text-warn mt-0.5 h-4.5 w-4.5 shrink-0"
+                            aria-hidden
+                          />
+                        ) : it.tone === "good" ? (
+                          <CheckCircle2
+                            className="mt-0.5 h-4.5 w-4.5 shrink-0 text-primary"
+                            aria-hidden
+                          />
+                        ) : (
+                          <TrendingUp
+                            className="mt-0.5 h-4.5 w-4.5 shrink-0 text-muted-foreground"
+                            aria-hidden
+                          />
+                        )}
+                        <p className="text-sm leading-relaxed">{it.text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                {/* 历史 */}
+                <section className="hairline-t py-8">
+                  <h2 className="label-caps mb-5 text-muted-foreground">
+                    历史记录
+                  </h2>
+                  <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+                    {records.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex items-center gap-4 px-4 py-3.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{fmtDateCn(r.date)}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {r.bedTime} – {r.wakeTime} ·{" "}
+                            {qualityShort(r.quality)}
+                            {r.note ? ` · ${r.note}` : ""}
+                          </p>
+                        </div>
+                        <span className="font-display shrink-0 text-lg tracking-tight">
+                          {fmtDur(durationOf(r))}
+                        </span>
+                        <div className="flex shrink-0 items-center">
+                          <button
+                            aria-label={`编辑 ${fmtDateCn(r.date)} 的记录`}
+                            onClick={() => {
+                              setEditing(r);
+                              setRecordOpen(true);
+                            }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            aria-label={`删除 ${fmtDateCn(r.date)} 的记录`}
+                            onClick={() => setDeleting(r)}
+                            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </>
+            )}
           </>
         )}
+
+        {tab === "sounds" && <SoundMixer />}
+        {tab === "alarm" && <AlarmPanel />}
       </main>
 
-      {/* 记录按钮 */}
-      <button
-        onClick={() => {
-          setEditing(null);
-          setRecordOpen(true);
-        }}
-        aria-label="记录睡眠"
-        className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_28px_hsl(var(--primary)/0.35)] transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-[max(1.25rem,calc(50%-21rem))]"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+      {/* 记录按钮（仅报告页） */}
+      {tab === "report" && (
+        <button
+          onClick={() => {
+            setEditing(null);
+            setRecordOpen(true);
+          }}
+          aria-label="记录睡眠"
+          className="fixed bottom-24 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_28px_hsl(var(--primary)/0.35)] transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-[max(1.25rem,calc(50%-21rem))]"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
+
+      <BottomNav tab={tab} onChange={setTab} />
+      <AlarmWatcher targetBedTime={settingsQuery.data?.targetBedTime ?? null} />
 
       <RecordDialog
         open={recordOpen}
